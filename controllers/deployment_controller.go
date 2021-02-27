@@ -19,15 +19,11 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/imharshita/image-controller/images"
 	appsv1 "k8s.io/api/apps/v1"
-
-	"strings"
-
-	"strings"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -54,9 +50,6 @@ func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-		// watch namespace
-		//namespaces := deployments.Namespace
-		//fmt.Println(namespaces)
 		containers := deployments.Spec.Template.Spec.Containers
 		for i, c := range containers {
 			fmt.Println("deployment image", c.Image)
@@ -73,7 +66,6 @@ func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					return reconcile.Result{}, err
 				}
 			}
-
 		}
 		return ctrl.Result{}, nil
 	}
