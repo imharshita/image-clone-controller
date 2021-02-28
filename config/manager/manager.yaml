@@ -70,7 +70,7 @@ spec:
         - /manager
         args:
         - --leader-elect
-        image: backupregistry/image-operator:v03
+        image: backupregistry/image-operator:v06
         name: manager
         env:
         - name: REGISTRY

@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -47,6 +48,24 @@ type DaemonSetReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+func isImagePresent(image string) bool {
+	var registry string = os.Getenv("REGISTRY")
+	if !strings.HasPrefix(image, registry) {
+		return true
+	}
+	return false
+}
+
+func isDaemonSetReady(daemonsets *appsv1.DaemonSet) bool {
+	status := daemonsets.Status
+	desired := status.DesiredNumberScheduled
+	ready := status.NumberReady
+	if desired > 0 && ready > 0 && desired == ready {
+		return true
+	}
+	return false
+}
+
 // Reconcile recociles DaemonSet
 func (r *DaemonSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reqNamespace := req.NamespacedName.Namespace
@@ -57,15 +76,11 @@ func (r *DaemonSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-		status := daemonsets.Status
-		desired := status.DesiredNumberScheduled
-		ready := status.NumberReady
-		//fmt.Println("daemonsets", daemonsets.Name, "desired nodes:", status.DesiredNumberScheduled, "ready nodes:", status.NumberReady)
-		if desired > 0 && ready > 0 && desired == ready {
-			//fmt.Println("inside condition daemonsets", daemonsets.Name, "desired nodes:", status.DesiredNumberScheduled, "ready nodes:", status.NumberReady)
+
+		if isDaemonSetReady(daemonsets) {
 			containers := daemonsets.Spec.Template.Spec.Containers
 			for i, c := range containers {
-				if !strings.HasPrefix(c.Image, "backupregistry") {
+				if isImagePresent(c.Image) {
 					fmt.Println("Updating image", c.Image, "of daemonset:", daemonsets.Name)
 					img, err := images.Process(c.Image)
 					if err != nil {
@@ -84,6 +99,16 @@ func (r *DaemonSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{}, nil
 }
 
+func isDeploymentReady(deployments *appsv1.Deployment) bool {
+	status := deployments.Status
+	desired := status.Replicas
+	ready := status.ReadyReplicas
+	if desired > 0 && ready > 0 && desired == ready {
+		return true
+	}
+	return false
+}
+
 // Reconcile reconciles Deployment
 func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reqNamespace := req.NamespacedName.Namespace
@@ -94,15 +119,11 @@ func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-		status := deployments.Status
-		//fmt.Println("deploymnets", deployments.Name, "desired replicas:", status.Replicas, "ready replicas:", status.ReadyReplicas)
-		desired := status.Replicas
-		ready := status.ReadyReplicas
-		if desired > 0 && ready > 0 && desired == ready {
+		if isDeploymentReady(deployments) {
 			containers := deployments.Spec.Template.Spec.Containers
 			for i, c := range containers {
-				if !strings.HasPrefix(c.Image, "backupregistry") {
-					fmt.Println("Updating image", c.Image, "of daemonset:", deployments.Name)
+				if isImagePresent(c.Image) {
+					fmt.Println("Updating image", c.Image, "of deployment:", deployments.Name)
 					img, err := images.Process(c.Image)
 					if err != nil {
 						return reconcile.Result{}, err

@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
 var registry string = os.Getenv("REGISTRY")
@@ -24,16 +24,13 @@ func rename(name string) string {
 	return newName
 }
 
-func retag(imgName string) (name.Tag, error) {
-	tag, err := name.NewTag(imgName)
-	if err != nil {
-		return name.Tag{}, err
-	}
-	return tag, nil
-}
-
 // Process public image to retag and push to private registry
 func Process(imgName string) (string, error) {
+	ref, err := name.ParseReference(imgName)
+	if err != nil {
+		log.Fatal(err)
+		return "", err
+	}
 	username := os.Getenv("USERNAME")
 	password := os.Getenv("PASSWORD")
 	auth := authn.AuthConfig{
@@ -41,19 +38,19 @@ func Process(imgName string) (string, error) {
 		Password: password,
 	}
 	authenticator := authn.FromConfig(auth)
-	opt := crane.WithAuth(authenticator)
-	img, err := crane.Pull(imgName)
+	opt := remote.WithAuth(authenticator)
+	img, err := remote.Image(ref, opt)
 	if err != nil {
 		log.Fatal(err)
 		return "", err
 	}
 	newName := rename(imgName)
-	tag, err := retag(newName)
+	newRef, err := name.ParseReference(newName)
 	if err != nil {
 		log.Fatal(err)
 		return "", err
 	}
-	if err := crane.Push(img, tag.String(), opt); err != nil {
+	if err := remote.Write(newRef, img, opt); err != nil {
 		log.Fatal(err)
 		return "", err
 	}
