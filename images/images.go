@@ -41,17 +41,14 @@ func Process(imgName string) (string, error) {
 	opt := remote.WithAuth(authenticator)
 	img, err := remote.Image(ref, opt)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	newName := rename(imgName)
 	newRef, err := name.ParseReference(newName)
 	if err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	if err := remote.Write(newRef, img, opt); err != nil {
-		log.Fatal(err)
 		return "", err
 	}
 	return newName, nil

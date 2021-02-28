@@ -61,12 +61,13 @@ func isDaemonSetReady(daemonsets *appsv1.DaemonSet) bool {
 	desired := status.DesiredNumberScheduled
 	ready := status.NumberReady
 	if desired > 0 && ready > 0 && desired == ready {
+		//fmt.Println("DaemonSet:", daemonsets.Name, "ready with desired nodes:", desired, "ready nodes", ready)
 		return true
 	}
 	return false
 }
 
-// Reconcile recociles DaemonSet
+// Reconcile recociles DaemonSet to uodate the image
 func (r *DaemonSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reqNamespace := req.NamespacedName.Namespace
 	if reqNamespace != "kube-system" {
@@ -76,22 +77,22 @@ func (r *DaemonSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-
 		if isDaemonSetReady(daemonsets) {
 			containers := daemonsets.Spec.Template.Spec.Containers
 			for i, c := range containers {
 				if isImagePresent(c.Image) {
-					fmt.Println("Updating image", c.Image, "of daemonset:", daemonsets.Name)
+					fmt.Println("Retagging image", c.Image, "of daemonset:", daemonsets.Name)
 					img, err := images.Process(c.Image)
 					if err != nil {
 						return reconcile.Result{}, err
 					}
-					fmt.Println("Updated image:", c.Image, " -> ", img)
+					fmt.Println("Updating image", c.Image, "of daemonset:", daemonsets.Name)
 					daemonsets.Spec.Template.Spec.Containers[i].Image = img
 					err = r.Update(context.TODO(), daemonsets)
 					if err != nil {
 						return reconcile.Result{}, err
 					}
+					fmt.Println("Updated image:", c.Image, " -> ", img)
 				}
 			}
 		}
@@ -104,12 +105,13 @@ func isDeploymentReady(deployments *appsv1.Deployment) bool {
 	desired := status.Replicas
 	ready := status.ReadyReplicas
 	if desired > 0 && ready > 0 && desired == ready {
+		//fmt.Println("Deployment:", deployments.Name, "ready with desired nodes:", desired, "ready nodes", ready)
 		return true
 	}
 	return false
 }
 
-// Reconcile reconciles Deployment
+// Reconcile reconciles Deployment to update the image
 func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reqNamespace := req.NamespacedName.Namespace
 	if reqNamespace != "kube-system" {
@@ -123,17 +125,19 @@ func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			containers := deployments.Spec.Template.Spec.Containers
 			for i, c := range containers {
 				if isImagePresent(c.Image) {
-					fmt.Println("Updating image", c.Image, "of deployment:", deployments.Name)
+					fmt.Println("Retagging image", c.Image, "of deployment:", deployments.Name)
 					img, err := images.Process(c.Image)
 					if err != nil {
 						return reconcile.Result{}, err
 					}
-					fmt.Println("Updated image:", c.Image, " -> ", img)
+					// update image
+					fmt.Println("Updating image", c.Image, "of deployment:", deployments.Name)
 					deployments.Spec.Template.Spec.Containers[i].Image = img
 					err = r.Update(context.TODO(), deployments)
 					if err != nil {
 						return reconcile.Result{}, err
 					}
+					fmt.Println("Updated image:", c.Image, " -> ", img)
 				}
 			}
 		}
