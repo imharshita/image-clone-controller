@@ -1,24 +1,28 @@
 package images
 
 import (
-	"fmt"
+	"log"
+	"os"
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/crane"
 	"github.com/google/go-containerregistry/pkg/name"
 )
 
-var privateRegistry string = "backupregistry"
+var registry string = os.Getenv("REGISTRY")
 
-// func rename(name string) string {
-// 	strings.Contains(name, "/")
-// 	image := strings.Split(name, "/")
-
-// 	image := strings.Split(name, ":")
-// 	img, version := image[0], image[1]
-// 	newName := privateRegistry + "/" + img + ":" + version
-// 	return newName
-// }
+func rename(name string) string {
+	var img string
+	image := strings.Split(name, "/")
+	if len(image) == 2 {
+		img = image[1]
+	} else {
+		img = image[0]
+	}
+	newName := registry + "/" + img
+	return newName
+}
 
 func retag(imgName string) (name.Tag, error) {
 	tag, err := name.NewTag(imgName)
@@ -28,29 +32,30 @@ func retag(imgName string) (name.Tag, error) {
 	return tag, nil
 }
 
+// Process public image to retag and push to private registry
 func Process(imgName string) (string, error) {
+	username := os.Getenv("USERNAME")
+	password := os.Getenv("PASSWORD")
 	auth := authn.AuthConfig{
-		Username: "backupregistry",
-		Password: "mydockerimages",
+		Username: username,
+		Password: password,
 	}
 	authenticator := authn.FromConfig(auth)
 	opt := crane.WithAuth(authenticator)
-	img, err := crane.Pull(imgName, opt)
-	fmt.Println("pulled image")
+	img, err := crane.Pull(imgName)
 	if err != nil {
+		log.Fatal(err)
 		return "", err
 	}
-	newName := "backupregistry/test:v1"
-	//newName := rename(imgName)
-	fmt.Println("rename", newName)
+	newName := rename(imgName)
 	tag, err := retag(newName)
 	if err != nil {
+		log.Fatal(err)
 		return "", err
 	}
-
 	if err := crane.Push(img, tag.String(), opt); err != nil {
+		log.Fatal(err)
 		return "", err
 	}
-	fmt.Println("pushed image")
 	return newName, nil
 }

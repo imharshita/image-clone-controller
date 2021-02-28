@@ -40,34 +40,82 @@ type DeploymentReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+// DaemonSetReconciler reconciles a DaemonSet object
+type DaemonSetReconciler struct {
+	client.Client
+	Log    logr.Logger
+	Scheme *runtime.Scheme
+}
+
+// Reconcile recociles DaemonSet
+func (r *DaemonSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	reqNamespace := req.NamespacedName.Namespace
+	if reqNamespace != "kube-system" {
+		_ = r.Log.WithValues("daemonset", req.NamespacedName)
+		daemonsets := &appsv1.DaemonSet{}
+		err := r.Get(context.TODO(), req.NamespacedName, daemonsets)
+		if err != nil {
+			return reconcile.Result{}, err
+		}
+		status := daemonsets.Status
+		desired := status.DesiredNumberScheduled
+		ready := status.NumberReady
+		//fmt.Println("daemonsets", daemonsets.Name, "desired nodes:", status.DesiredNumberScheduled, "ready nodes:", status.NumberReady)
+		if desired > 0 && ready > 0 && desired == ready {
+			//fmt.Println("inside condition daemonsets", daemonsets.Name, "desired nodes:", status.DesiredNumberScheduled, "ready nodes:", status.NumberReady)
+			containers := daemonsets.Spec.Template.Spec.Containers
+			for i, c := range containers {
+				if !strings.HasPrefix(c.Image, "backupregistry") {
+					fmt.Println("Updating image", c.Image, "of daemonset:", daemonsets.Name)
+					img, err := images.Process(c.Image)
+					if err != nil {
+						return reconcile.Result{}, err
+					}
+					fmt.Println("Updated image:", c.Image, " -> ", img)
+					daemonsets.Spec.Template.Spec.Containers[i].Image = img
+					err = r.Update(context.TODO(), daemonsets)
+					if err != nil {
+						return reconcile.Result{}, err
+					}
+				}
+			}
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+// Reconcile reconciles Deployment
 func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reqNamespace := req.NamespacedName.Namespace
-	if reqNamespace != "kube-system" && reqNamespace != "system" {
+	if reqNamespace != "kube-system" {
 		_ = r.Log.WithValues("deployment", req.NamespacedName)
-
 		deployments := &appsv1.Deployment{}
 		err := r.Get(context.TODO(), req.NamespacedName, deployments)
 		if err != nil {
 			return reconcile.Result{}, err
 		}
-		containers := deployments.Spec.Template.Spec.Containers
-		for i, c := range containers {
-			fmt.Println("deployment image", c.Image)
-			if !strings.HasPrefix(c.Image, "backupregistry") {
-				img, err := images.Process(c.Image)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-				fmt.Println("upated image:", img)
-				// Update the Deployment
-				deployments.Spec.Template.Spec.Containers[i].Image = img
-				err = r.Update(context.TODO(), deployments)
-				if err != nil {
-					return reconcile.Result{}, err
+		status := deployments.Status
+		//fmt.Println("deploymnets", deployments.Name, "desired replicas:", status.Replicas, "ready replicas:", status.ReadyReplicas)
+		desired := status.Replicas
+		ready := status.ReadyReplicas
+		if desired > 0 && ready > 0 && desired == ready {
+			containers := deployments.Spec.Template.Spec.Containers
+			for i, c := range containers {
+				if !strings.HasPrefix(c.Image, "backupregistry") {
+					fmt.Println("Updating image", c.Image, "of daemonset:", deployments.Name)
+					img, err := images.Process(c.Image)
+					if err != nil {
+						return reconcile.Result{}, err
+					}
+					fmt.Println("Updated image:", c.Image, " -> ", img)
+					deployments.Spec.Template.Spec.Containers[i].Image = img
+					err = r.Update(context.TODO(), deployments)
+					if err != nil {
+						return reconcile.Result{}, err
+					}
 				}
 			}
 		}
-		return ctrl.Result{}, nil
 	}
 	return ctrl.Result{}, nil
 }
@@ -78,6 +126,16 @@ func (r *DeploymentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&appsv1.Deployment{}).
 		Owns(&corev1.Pod{}).
 		Watches(&source.Kind{Type: &appsv1.Deployment{}},
+			&handler.EnqueueRequestForObject{}).
+		Complete(r)
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *DaemonSetReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&appsv1.DaemonSet{}).
+		Owns(&corev1.Pod{}).
+		Watches(&source.Kind{Type: &appsv1.DaemonSet{}},
 			&handler.EnqueueRequestForObject{}).
 		Complete(r)
 }

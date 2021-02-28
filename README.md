@@ -1,1 +1,1 @@
-# image-clone-controller
+# image-controller

@@ -70,8 +70,21 @@ spec:
         - /manager
         args:
         - --leader-elect
-        image: harshitadocker/image-operator:v2
+        image: backupregistry/image-operator:v03
         name: manager
+        env:
+        - name: REGISTRY
+          value: backupregistry
+        - name: USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: registry-secret
+              key: registry-username 
+        - name: PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: registry-secret
+              key: registry-passowrd
         securityContext:
           allowPrivilegeEscalation: false
         livenessProbe:
@@ -94,3 +107,4 @@ spec:
             cpu: 100m
             memory: 20Mi
       terminationGracePeriodSeconds: 10
+      
