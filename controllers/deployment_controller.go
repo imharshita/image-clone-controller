@@ -23,6 +23,9 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/imharshita/image-controller/pkg/images"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	//"github.com/prometheus/common/log"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -66,7 +69,7 @@ func isDaemonSetReady(daemonsets *appsv1.DaemonSet) bool {
 	status := daemonsets.Status
 	desired := status.DesiredNumberScheduled
 	ready := status.NumberReady
-	if desired > 0 && ready > 0 && desired == ready {
+	if desired == ready && desired > 0 {
 		return true
 	}
 	return false
@@ -109,7 +112,7 @@ func isDeploymentReady(deployments *appsv1.Deployment) bool {
 	status := deployments.Status
 	desired := status.Replicas
 	ready := status.ReadyReplicas
-	if desired > 0 && ready > 0 && desired == ready {
+	if desired == ready && desired > 0 {
 		return true
 	}
 	return false
@@ -117,6 +120,8 @@ func isDeploymentReady(deployments *appsv1.Deployment) bool {
 
 // Reconcile reconciles Deployment to update the image
 func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	// set up a convenient log object so we don't have to type request over and over again
+	log := log.FromContext(ctx)
 	reqNamespace := req.NamespacedName.Namespace
 	if reqNamespace != KubeNs {
 		_ = r.Log.WithValues("deployment", req.NamespacedName)
@@ -129,19 +134,19 @@ func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			containers := deployments.Spec.Template.Spec.Containers
 			for i, c := range containers {
 				if isImagePresent(c.Image) {
-					r.Log.WithValues("Retagging image", c.Image, "of deployment:", deployments.Name)
+					log.Info("Retagging image", c.Image, "of deployment:", deployments.Name)
 					img, err := images.Process(c.Image)
 					if err != nil {
 						return reconcile.Result{}, err
 					}
 					// Update image
-					r.Log.WithValues("Updating image", c.Image, "of deployment:", deployments.Name)
+					log.Info("Updating image", c.Image, "of deployment:", deployments.Name)
 					deployments.Spec.Template.Spec.Containers[i].Image = img
 					err = r.Update(context.TODO(), deployments)
 					if err != nil {
 						return reconcile.Result{}, err
 					}
-					r.Log.WithValues("Updated image:", c.Image, " -> ", img)
+					log.Info("Updated image:", c.Image, " -> ", img)
 				}
 			}
 		}
