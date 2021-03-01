@@ -1,4 +1,4 @@
-module github.com/imharshita/image-controller
+module github.com/imharshita/image-clone-controller
 
 go 1.16
 

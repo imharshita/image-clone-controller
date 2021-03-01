@@ -12,8 +12,8 @@ import (
 
 var repository string = os.Getenv("REPOSITORY")
 
-func rename(name string) (string, string) {
-	var registry, img, tag string
+func rename(name string) (string, string, string) {
+	var registry, img, tag, newName string
 	list := strings.Split(name, "/")
 	if len(list) == 2 {
 		img = list[1]
@@ -24,9 +24,16 @@ func rename(name string) (string, string) {
 		list := strings.Split(img, ":")
 		registry = list[0]
 		tag = list[1]
+	} else {
+		registry = img
 	}
 	registry = repository + "/" + registry
-	return registry, tag
+	if len(tag) != 0 {
+		newName = registry + ":" + tag
+	} else {
+		newName = registry
+	}
+	return registry, tag, newName
 }
 
 func imagePresent(registry, tag string, opt remote.Option) bool {
@@ -69,8 +76,7 @@ func Process(imgName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	registry, tag := rename(imgName)
-	newName := registry + ":" + tag
+	registry, tag, newName := rename(imgName)
 	newRef, err := name.ParseReference(newName)
 	if err != nil {
 		return "", err

@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
-	"github.com/imharshita/image-controller/pkg/images"
+	"github.com/imharshita/image-clone-controller/pkg/images"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -54,7 +54,7 @@ type DaemonSetReconciler struct {
 }
 
 func isImagePresent(image string) bool {
-	Registry := os.Getenv("REGISTRY")
+	Registry := os.Getenv("REPOSITORY")
 	if len(Registry) == 0 {
 		return false
 	} else if !strings.HasPrefix(image, Registry) {
@@ -143,14 +143,14 @@ func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			for i, c := range containers {
 				if isImagePresent(c.Image) {
 					var msg string
-					msg = fmt.Sprintf("Retagging image %s of daemonset: %s", c.Image, deployments.Name)
+					msg = fmt.Sprintf("Retagging image %s of deployment: %s", c.Image, deployments.Name)
 					setupLog.Info(msg)
 					img, err := images.Process(c.Image)
 					if err != nil {
 						return reconcile.Result{}, err
 					}
 					// Update image
-					msg = fmt.Sprintf("Updating image %s of daemonset: %s", c.Image, deployments.Name)
+					msg = fmt.Sprintf("Updating image %s of deployment: %s", c.Image, deployments.Name)
 					setupLog.Info(msg)
 					deployments.Spec.Template.Spec.Containers[i].Image = img
 					err = r.Update(context.TODO(), deployments)
