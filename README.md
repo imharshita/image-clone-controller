@@ -20,7 +20,10 @@ is ignored!
 Registry secret yaml should be present
 
 ```
-code
+$ kubectl create -f conifg/secrets/secret.yaml
+$ kubectl create -f conifg/manager/service_account.yaml
+$ kubectl create -f conifg/manager/role.yaml
+$ kubectl create -f conifg/manager/role_binding.yaml
 ```
 ### Goal
 Goal here is to be safe against the risk of public container images disappearing from the registry while
@@ -28,5 +31,8 @@ we use them, breaking our deployments.
 
 ### 
 Controller is written in Go
+
+
+
 
 
