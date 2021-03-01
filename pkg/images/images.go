@@ -1,6 +1,7 @@
 package images
 
 import (
+	"errors"
 	"os"
 	"strings"
 
@@ -9,18 +10,48 @@ import (
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 )
 
-var registry string = os.Getenv("REGISTRY")
+var repository string = os.Getenv("REPOSITORY")
 
-func rename(name string) string {
-	var img string
-	image := strings.Split(name, "/")
-	if len(image) == 2 {
-		img = image[1]
+func rename(name string) (string, string) {
+	var registry, img, tag string
+	list := strings.Split(name, "/")
+	if len(list) == 2 {
+		img = list[1]
 	} else {
-		img = image[0]
+		img = list[0]
 	}
-	newName := registry + "/" + img
-	return newName
+	if strings.Contains(img, ":") {
+		list := strings.Split(img, ":")
+		registry = list[0]
+		tag = list[1]
+	}
+	registry = repository + "/" + registry
+	return registry, tag
+}
+
+func imagePresent(registry, tag string, opt remote.Option) bool {
+	rep, _ := name.NewRepository(registry)
+	list, _ := remote.List(rep, opt)
+	for _, t := range list {
+		if t == tag {
+			return true
+		}
+	}
+	return false
+}
+
+func fetchCredentials() (authn.Authenticator, error) {
+	username := os.Getenv("USERNAME")
+	password := os.Getenv("PASSWORD")
+	if len(username) == 0 || len(password) == 0 {
+		return nil, errors.New("Failed to fetch credentials")
+	}
+	auth := authn.AuthConfig{
+		Username: username,
+		Password: password,
+	}
+	authenticator := authn.FromConfig(auth)
+	return authenticator, nil
 }
 
 // Process public image to retag and push to private registry
@@ -29,28 +60,25 @@ func Process(imgName string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	username := os.Getenv("USERNAME")
-	password := os.Getenv("PASSWORD")
-	if len(username) == 0 && len(password) == 0 {
-		return "", err
-	}
-	auth := authn.AuthConfig{
-		Username: username,
-		Password: password,
-	}
-	authenticator := authn.FromConfig(auth)
-	opt := remote.WithAuth(authenticator)
-	img, err := remote.Image(ref, opt)
+	authenticator, err := fetchCredentials()
 	if err != nil {
 		return "", err
 	}
-	newName := rename(imgName)
+	opt := remote.WithAuth(authenticator)
+	img, err := remote.Image(ref)
+	if err != nil {
+		return "", err
+	}
+	registry, tag := rename(imgName)
+	newName := registry + ":" + tag
 	newRef, err := name.ParseReference(newName)
 	if err != nil {
 		return "", err
 	}
-	if err := remote.Write(newRef, img, opt); err != nil {
-		return "", err
+	if !imagePresent(registry, tag, opt) {
+		if err := remote.Write(newRef, img, opt); err != nil {
+			return "", err
+		}
 	}
 	return newName, nil
 }

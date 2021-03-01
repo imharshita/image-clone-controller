@@ -18,14 +18,12 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/imharshita/image-controller/pkg/images"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	//"github.com/prometheus/common/log"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -75,11 +73,16 @@ func isDaemonSetReady(daemonsets *appsv1.DaemonSet) bool {
 	return false
 }
 
+var (
+	scheme   = runtime.NewScheme()
+	setupLog = ctrl.Log.WithName("execution")
+)
+
 // Reconcile recociles DaemonSet to uodate the image
 func (r *DaemonSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reqNamespace := req.NamespacedName.Namespace
 	if reqNamespace != KubeNs {
-		_ = r.Log.WithValues("daemonset", req.NamespacedName)
+		r.Log.WithValues("daemonset", req.NamespacedName)
 		daemonsets := &appsv1.DaemonSet{}
 		err := r.Get(context.TODO(), req.NamespacedName, daemonsets)
 		if err != nil {
@@ -89,18 +92,25 @@ func (r *DaemonSetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			containers := daemonsets.Spec.Template.Spec.Containers
 			for i, c := range containers {
 				if isImagePresent(c.Image) {
-					r.Log.WithValues("Retagging image", c.Image, "of daemonset:", daemonsets.Name)
+					var msg string
+					msg = fmt.Sprintf("Retagging image %s of daemonset: %s", c.Image, daemonsets.Name)
+					setupLog.Info(msg)
 					img, err := images.Process(c.Image)
 					if err != nil {
+						msg = fmt.Sprintf("Failed to process image: %s", img)
+						setupLog.Error(err, msg)
 						return reconcile.Result{}, err
 					}
-					r.Log.WithValues("Updating image", c.Image, "of daemonset:", daemonsets.Name)
+					// update image
+					msg = fmt.Sprintf("Updating image %s of daemonset: %s", c.Image, daemonsets.Name)
+					setupLog.Info(msg)
 					daemonsets.Spec.Template.Spec.Containers[i].Image = img
 					err = r.Update(context.TODO(), daemonsets)
 					if err != nil {
 						return reconcile.Result{}, err
 					}
-					r.Log.WithValues("Updated image:", c.Image, " -> ", img)
+					msg = fmt.Sprintf("Updated image: %s -> %s", c.Image, img)
+					setupLog.Info(msg)
 				}
 			}
 		}
@@ -120,11 +130,9 @@ func isDeploymentReady(deployments *appsv1.Deployment) bool {
 
 // Reconcile reconciles Deployment to update the image
 func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	// set up a convenient log object so we don't have to type request over and over again
-	log := log.FromContext(ctx)
 	reqNamespace := req.NamespacedName.Namespace
 	if reqNamespace != KubeNs {
-		_ = r.Log.WithValues("deployment", req.NamespacedName)
+		r.Log.WithValues("deployment", req.NamespacedName)
 		deployments := &appsv1.Deployment{}
 		err := r.Get(context.TODO(), req.NamespacedName, deployments)
 		if err != nil {
@@ -134,19 +142,23 @@ func (r *DeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			containers := deployments.Spec.Template.Spec.Containers
 			for i, c := range containers {
 				if isImagePresent(c.Image) {
-					log.Info("Retagging image", c.Image, "of deployment:", deployments.Name)
+					var msg string
+					msg = fmt.Sprintf("Retagging image %s of daemonset: %s", c.Image, deployments.Name)
+					setupLog.Info(msg)
 					img, err := images.Process(c.Image)
 					if err != nil {
 						return reconcile.Result{}, err
 					}
 					// Update image
-					log.Info("Updating image", c.Image, "of deployment:", deployments.Name)
+					msg = fmt.Sprintf("Updating image %s of daemonset: %s", c.Image, deployments.Name)
+					setupLog.Info(msg)
 					deployments.Spec.Template.Spec.Containers[i].Image = img
 					err = r.Update(context.TODO(), deployments)
 					if err != nil {
 						return reconcile.Result{}, err
 					}
-					log.Info("Updated image:", c.Image, " -> ", img)
+					msg = fmt.Sprintf("Updated image: %s -> %s", c.Image, img)
+					setupLog.Info(msg)
 				}
 			}
 		}
